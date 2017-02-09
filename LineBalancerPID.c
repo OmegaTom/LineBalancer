@@ -38,7 +38,7 @@
 // the following approach is using 4 parallel working PID controllers
 //
 // (1) 'gyro_speed': contolling the gyro speed
-// (2) 'gyroAngle': controlling the gyro angle
+// (2) 'gyro_angle': controlling the gyro angle
 // (3) 'robot_position': controlling the robot position
 // (4) 'robot_speed': controlling the robot speed
 //
@@ -78,8 +78,8 @@
 //
 // for those who are interested in the mathematical background I can recommend
 // https://en.wikipedia.org/wiki/PID_controller
-// the wiki article is covering some complex mathematical theories and you might have leran a lot more to be able to undertand everything in detail.
-// a very nice 'easy to understand' artircle about PID controllers you can find under
+// the wiki article is covering some complex mathematical theories and you might have to learn a lot more to be able to undertand everything in detail.
+// a very nice 'easy to understand' article about PID controllers you can find under
 // http://www.inpharmix.com/jps/PID_Controller_For_Lego_Mindstorms_Robots.html
 
 
