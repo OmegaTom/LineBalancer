@@ -29,10 +29,10 @@ we normally want to control a specific physical parameter like the robot speed d
 
 the following approach is using 4 parallel working PID controllers
 
- -(1) 'gyro_speed': contolling the gyro speed
- -(2) 'gyroAngle': controlling the gyro angle
- -(3) 'robot_position': controlling the robot position
- -(4) 'robot_speed': controlling the robot speed
+ - (1) 'gyro_speed': contolling the gyro speed
+ - (2) 'gyroAngle': controlling the gyro angle
+ - (3) 'robot_position': controlling the robot position
+ - (4) 'robot_speed': controlling the robot speed
 
 this approach gives a lot of room for parameter optimizations and is a very good example how a
 combination of several PID controllers can work. The basic idea is explained below in more detail.
