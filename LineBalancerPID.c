@@ -38,7 +38,7 @@
 // the following approach is using 4 parallel working PID controllers
 //
 // (1) 'gyro_speed': contolling the gyro speed
-// (2) 'gyro_angle': controlling the gyro angle
+// (2) 'gyroAngle': controlling the gyro angle
 // (3) 'robot_position': controlling the robot position
 // (4) 'robot_speed': controlling the robot speed
 //
@@ -78,8 +78,8 @@
 //
 // for those who are interested in the mathematical background I can recommend
 // https://en.wikipedia.org/wiki/PID_controller
-// the wiki article is covering some complex mathematical theories and you might have to learn a lot more to be able to undertand everything in detail.
-// a very nice 'easy to understand' article about PID controllers you can find under
+// the wiki article is covering some complex mathematical theories and you might have leran a lot more to be able to undertand everything in detail.
+// a very nice 'easy to understand' artircle about PID controllers you can find under
 // http://www.inpharmix.com/jps/PID_Controller_For_Lego_Mindstorms_Robots.html
 
 
@@ -103,7 +103,7 @@
 
 
 // 'Requested' sample time in milliseconds
-#define sampleTime  ( 15 )					// 15ms seems to work fine without any timing overflows
+#define sampleTime  ( 15.0 )					// 15ms seems to work fine without any timing overflows
 
 // Wheel diameter in mm (in my case small wheels) -- needed to compute robot position in mmm and robot speed in mmm/sec
 // general: the bigger the wheels the better
@@ -238,60 +238,70 @@ void readGyro(float *g_speed, float *g_angle, float *gyroRateBias,float dT)
 * dmp: damping of the integral ( working value is something near but smaller  than 0 )
 * sat: saturation of integral ( working value something like 'max_power'/ki )
 *
-* this is a 'classic' implementation of a PID controller. The damping factor can be used
-* to 'damp' the integration of the error. This makes sense if the error includes
-* slow drifts (e.g. slow sensor drifts that would sum up over time).
-* the saturation parameter can be used to limit the integration of the error.
-* Often it makes no sense to sum up the error above a specific limit (e.g. in our case
-* the motor power is limited)
+* this PID implementation includes 
+* - derivative filtering (the derivative term is based on input derivate)
+* - anti windup
+* - setpoint (reference) weighting
+*
 */
 typedef struct
 {
-	float Kp;						// proportional gain
-	float Ki;						// integral gain
-	float Kd;						// derivative gain
-	float damping;			// optional dampling factor for the integral (1.0 == no dampling)
-	float saturation;		// optional integral saturation (0.0 == no saturation)
-
-	float sum_err;			// error integral
-	float prev_err;			// previous error to calculate the derivative term
+	float kp;
+	float sw;
+	
+	float bi;
+	float ad;
+	float bd;
+	float br;
+	float saturation_low;
+	float saturation_high;
+	
+	float input_old;
+	float I;						// integral
+	float D;						// derivative term
 }PID;
 
 /**
 * set all gain factors/parameters of the specidfied PID controller
+* kp									proprtianl gain
+* ki									integral gain
+* kd 									derivative gain
+* setpoint_weigth			setpoint weight for the proportional
+* Tf									derivative filter time constant  (kd/kp)/N  N=2..20
+* Tt									anti-windup time constant
+* saturation_low			anti-windup upper saturarion level
+* saturation_high			anti-windup lower saturation level
+* dT									sampling time
 */
-void PID_init(PID *pid, float kp, float ki, float kd, float dmp, float sat)
+void PID_init(PID *pid, float kp, float ki, float kd, float setpoint_weight, float Tf, float Tt, float saturation_low, float saturation_high, float dT)
 {
-	pid->Kp=kp;								// proportional gain
-	pid->Ki=ki;								// integral gain
-	pid->Kd=kd;								// derivative gain
-	pid->damping=dmp;					// damping factor of the integral term
-	pid->saturation=sat;			// optional saturation
+	pid->kp = kp;
+	pid->bi = ki * dT;					
+	pid->ad = Tf / (Tf + dT);		
+	pid->bd = kd / (Tf + dT);								
+	pid->br = dT / Tt;					
+	pid->saturation_low = saturation_low;
+	pid->saturation_high = saturation_high;
+	pid->sw = setpoint_weight;
 
-	pid->sum_err=0;						// error integral
-	pid->prev_err=0;					// previous error to calculate the derivative term
+	pid->D = 0;						// derivative term
+	pid->I = 0;						// error integral
+	pid->input_old = 0;			// used to calculate the derivative term based on measured value
 }
 
-float PID_calc(PID *pid, float reference, float input, float dT, float *curr_err)
+float PID_calc(PID *pid, float reference, float input, float *curr_err)
 {
-	float err,errd;
-
-	err = reference - input;																			// current error
-	pid->sum_err = (pid->sum_err * pid->damping) + err * dT;			// integral term
-
-	// limit the integral if saturation is activated
-	if(pid->saturation > 0)
-  {
-		if(pid->sum_err > pid->saturation) pid->sum_err=pid->saturation;
-		else if(pid->sum_err < (-pid->saturation)) pid->sum_err=-pid->saturation;
-  }
-
-	errd = (pid->prev_err - err) / dT;														// derivative term
-	pid->prev_err = err;
-	*curr_err = err;
-
-	// finally calculate the PID output using the gain factors
-	return ((pid->Kp * err) + (pid->Ki * pid->sum_err) + (pid->Kd * errd));
+	*curr_err = reference - input;
+	float P = pid->kp * (pid->sw * reference - input);
+	pid->D = pid->ad * pid->D - pid->bd * (input - pid->input_old);
+	float v = P + pid->I + pid->D;
+	float u = v;
+	if(u > pid->saturation_high) u = pid->saturation_high;
+	else if(u < pid->saturation_low) u = pid->saturation_low;
+	pid->I = pid->I + pid->bi * (reference - input) + pid->br * (u - v); 
+	pid->input_old = input;
+	
+	return v;
 }
 /*****************
 
@@ -311,7 +321,7 @@ float position( float lastReferencePosition, float requestedSpeed, float dT )
 /**
 * Main program
 */
-#define ROBOT_SPEED (50.00)				// robot speed mm/sec
+#define ROBOT_SPEED (100.00)				// robot speed mm/sec
 task main()
 {
 	// active line follower?
@@ -384,17 +394,18 @@ task main()
 
 	// initialize the PID controls
 	// parameters for the gyro control loops
-	PID_init(&gyro_angle,20.0,55.0,0.0,0.95,90.0/55.0);
-	PID_init(&gyro_speed,1.5,5,0,0.95,90.0/5.0);
+	// void PID_init(PID *pid, float kp, float ki, float kd, float setpoint_weight, float Tf, float Tt, float saturation_low, float saturation_high, float dT)
+	PID_init(&gyro_angle, 20.0, 55.0, 0.0, 1.0, 0.0, 0.3, -100, 100, sampleTime/1000.0);
+	PID_init(&gyro_speed, 1.5, 5.0, 0.0, 1.0, 0.0, 0.3, -100, 100, sampleTime/1000.0);
 
 	// parameters for the encoder control loop (robot position and speed))
 	// the output of both controllers (robot position and speed) must be 'subtracted' from the motor power.
-	PID_init(&robot_position,1.0,0.3,0.0,0.95,90.0/0.7);
-	PID_init(&robot_speed,0.47,0.16,0.0,0.95,90.0/0.16);
+	PID_init(&robot_position, 1.0, 0.3, 0.0, 0.2, 0.0, 0.3, -100, 100, sampleTime/1000.0);
+	PID_init(&robot_speed, 0.47, 0.16, 0.0, 0.2, 0.0, 0.3, -100, 100, sampleTime/1000.0);
 
 	// simple line follower PID --> steering
 	// error == getColorHue - lineRef, lineRef == initial value ('edge' of line)
-	PID_init(&line,1.0,0.3,0.0,1,STEERING_LIMIT / 0.3);				// working fine for 5cm/sec
+	PID_init(&line, 1.0, 0.3, 0.0, 1.0, 0.0, 1.0, -100, 100, sampleTime/1000.0);				// working fine for 5cm/sec
 
 	eraseDisplay();
 
@@ -433,16 +444,16 @@ task main()
 			// Get expected position based on current position and requested speed
 			referencePosition = position( referencePosition, requestedSpeed, dT );
 			// controllers for robot position and speed.
-			pidRobotPositionOutput = PID_calc(&robot_position, referencePosition, robotPosition, dT, &robot_position_err );		// reference is 'next' position (depending on the requested robot speed)
-			pidRobotSpeedOutput = PID_calc(&robot_speed, requestedSpeed, robotSpeed, dT, &robot_speed_err );									// reference is the requested robot speed
+			pidRobotPositionOutput = PID_calc(&robot_position, referencePosition, robotPosition, &robot_position_err );		// reference is 'next' position (depending on the requested robot speed)
+			pidRobotSpeedOutput = PID_calc(&robot_speed, requestedSpeed, robotSpeed, &robot_speed_err );									// reference is the requested robot speed
 
 
 			// PID control gyro angle and speed
 			// Read the gyro and update gyroRateBias and robot angle
 			readGyro(&gyroSpeed, &gyroAngle, &gyroRateBias, dT);
 			// controller for gyro based balancing. Reference is 0 for speed and angle to balance the robot
-			pidGyroAngleOutput = PID_calc(&gyro_angle, 0, gyroAngle, dT, &gyro_angle_err );
-			pidGyroSpeedOutput = PID_calc(&gyro_speed, 0, gyroSpeed, dT, &gyro_speed_err );
+			pidGyroAngleOutput = PID_calc(&gyro_angle, 0, gyroAngle, &gyro_angle_err );
+			pidGyroSpeedOutput = PID_calc(&gyro_speed, 0, gyroSpeed, &gyro_speed_err );
 
 
 
@@ -462,7 +473,7 @@ task main()
 			if(follow)
 		  {
 				// PID control line follower
-		  	pidLineOutput = PID_calc(&line, lineRef, getColorHue (colorSensor), dT, &line_err);
+		  	pidLineOutput = PID_calc(&line, lineRef, getColorHue (colorSensor), &line_err);
 				// limit the 'steering power'
 		  	if(pidLineOutput>STEERING_LIMIT) pidLineOutput=STEERING_LIMIT;
 				else if(pidLineOutput<-STEERING_LIMIT) pidLineOutput=-STEERING_LIMIT;
