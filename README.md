@@ -59,7 +59,7 @@ imagine that the robot is a few mm behind the ideal reference position in a 'per
 So we have to move forward to correct the position (to minimize the position error).
 To move forward it is not 'allowed' just to move forward because the robot would fall onto the backside.
 To move forward the robot must move backwards first and than accelerate forward (here the gyro control loop is doing the job)
-To balance again (this is the way a balancing robot can make a 'step' forward).
+to balance again (this is the way a balancing robot can make a 'step' forward).
 In other words we have to set the motor power to negative values to be able to move forward afterwards to reach the
 reference position (that means that we are increasing the position PID error in order to get the possibility to minimize the same
 error afterwards. The bigger the distance to the reference point in our example (the bigger the error) the more
