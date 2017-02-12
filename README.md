@@ -75,3 +75,5 @@ https://en.wikipedia.org/wiki/PID_controller
 the wiki article is covering some complex mathematical theories and you might have to learn a lot more to be able to understand everything in detail.
 a very nice 'easy to understand' article about PID controllers you can find under
 http://www.inpharmix.com/jps/PID_Controller_For_Lego_Mindstorms_Robots.html
+
+the current implementation of the PID controller(s) include setpoint weighting, anti-windup and derivative filtering. 
