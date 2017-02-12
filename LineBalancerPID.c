@@ -338,7 +338,7 @@ task main()
 	bool ir_remote = true;					// activate simple IR remote control
 	int steer_left = 0;							// ir steering left motor
 	int steer_right = 0;						// ir steering rigth motor
-
+	
 	// this is the requested robot speed in m/s
 	float requestedSpeed=ROBOT_SPEED;
 
@@ -511,10 +511,11 @@ task main()
 		  		case IR_RED_UP_RED_DOWN : requestedSpeed = 0.0; break;
 		  		case IR_BLUE_UP_BLUE_DOWN : {steer_right = 0; steer_left = 0;};break;
 		  		case IR_BEACON_MODE_ON : {requestedSpeed = 0.0; steer_right = 0; steer_left = 0;};break;
-		  		case IR_RED_UP_BLUE_UP : moveMotorTarget ( liftMotor , 5, -5 ); break;
-		  		case IR_RED_DOWN_BLUE_DOWN : moveMotorTarget ( liftMotor , 5, 5 ); break;
-
+		  		case IR_RED_UP_BLUE_UP : setMotor(liftMotor, -5);break;
+		  		case IR_RED_DOWN_BLUE_DOWN : setMotor(liftMotor, 5);break;		  	
+		  		default: setMotor(liftMotor, 0); 			
 		  	}
+		  	
 		  }
 
 		  // please consider that 'pidRobotPositionOutput' and 'pidRobotSpeedOutput' are subtracted (see explanation above)
