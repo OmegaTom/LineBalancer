@@ -78,7 +78,9 @@ http://www.inpharmix.com/jps/PID_Controller_For_Lego_Mindstorms_Robots.html
 
 the current implementation of the PID controller(s) include setpoint weighting, anti-windup and derivative filtering. 
 
+
 current performance: see https://youtu.be/GFn5yuKCs_I
+
 significant load change: see https://youtu.be/Qtc4vbvJ-oA
 
  
