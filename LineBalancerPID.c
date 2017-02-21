@@ -105,13 +105,16 @@
 // 'Requested' sample time in milliseconds
 #define sampleTime  ( 20.0 )					// 20ms seems to work fine without any timing overflows
 
-// Wheel diameter in mm (in my case small wheels) -- needed to compute robot position in mmm and robot speed in mmm/sec
-// general: the bigger the wheels the better
-short wheelDiameterIn_mm = 42.0;
+// Wheel diameter in mm -- needed to compute robot position in mmm and robot speed in mmm/sec
+// general: the bigger the wheels the better because max speed is higher (see pid_corr_dia)
+short wheelDiameterIn_mm = 70.0;
 // Convert wheel diameter to radius in mm
 float wheelRadius = wheelDiameterIn_mm / 2;
 
-
+float pid_corr_dia = 42.0 / wheelDiameterIn_mm;  	// original PID parameters have been optimized for small 42mm wheels
+																						 			// for diffrent wheel diameters we need a corrective factor for the PID parameters 
+																						 			// this linear approach works fine for 42mm, 56mm and 70mm wheels
+																						 
 
 /**
 * Calibration of gyro and color sensor reference
@@ -323,10 +326,12 @@ float position( float lastReferencePosition, float requestedSpeed, float dT )
 * Main program
 */
 #define ROBOT_SPEED (000.00)				// robot speed mm/sec
+#define EDGE_THRESHOLD			10
 task main()
 {
 	// active line follower?
 	bool follow = false;						// set true if the robot should follow a line
+	bool stopatedge = false;				// if true the robot stops as soon an edge is detected
 
 	float lineRef = 45.0;						// color sensor refernce value for PID control
 
@@ -338,7 +343,7 @@ task main()
 	bool ir_remote = true;					// activate simple IR remote control
 	int steer_left = 0;							// ir steering left motor
 	int steer_right = 0;						// ir steering rigth motor
-	
+
 	// this is the requested robot speed in m/s
 	float requestedSpeed=ROBOT_SPEED;
 
@@ -403,14 +408,23 @@ task main()
 	// initialize the PID controls
 	// parameters for the gyro control loops
 	// void PID_init(PID *pid, float kp, float ki, float kd, float setpoint_weight, float Tf, float Tt, float saturation_low, float saturation_high, float dT)
-	PID_init(&gyro_angle, 35.0, 55.0, 0.25, 1.0, 0.25/35.0/10.0, 0.3, -100, 100, sampleTime/1000.0);
-	PID_init(&gyro_speed, 1.5, 5.0, 0.001, 1.0, 0.001/1.5/15.0, 0.3, -100, 100, sampleTime/1000.0);
+	//PID_init(&gyro_angle, 35.0, 55.0, 0.25, 1.0, 0.25/35.0/10.0, 0.3, -100, 100, sampleTime/1000.0);  // optimal for 42mm wheels
+	//PID_init(&gyro_speed, 1.5, 5.0, 0.001, 1.0, 0.001/1.5/15.0, 0.3, -100, 100, sampleTime/1000.0);		// optimal for 42mm wheels
+	
+	// supports different wheel diameters: 42mm,56mm,70mm tested
+	PID_init(&gyro_angle, 35.0 * pid_corr_dia, 55.0 * pid_corr_dia, 0.25 * pid_corr_dia , 1.0, (0.25 * pid_corr_dia) / (35.0 * pid_corr_dia) / 10.0, 0.3, -100, 100, sampleTime/1000.0);
+	PID_init(&gyro_speed, 1.5 * pid_corr_dia, 5.0 * pid_corr_dia, 0.001 * pid_corr_dia, 1.0, (0.001 * pid_corr_dia) / (1.5 * pid_corr_dia) / 15.0, 0.3, -100, 100, sampleTime/1000.0);
+
 
 	// parameters for the encoder control loop (robot position and speed))
 	// the output of both controllers (robot position and speed) must be 'subtracted' from the motor power.
-	PID_init(&robot_position, 1.5, 1.0, 0.01, 0.2, 0.01/1.5/10.0, 0.3, -100, 100, sampleTime/1000.0);
-	//PID_init(&robot_speed, 0.47, 0.16, 0.0, 0.2, 0.0, 0.3, -100, 100, sampleTime/1000.0);
-	PID_init(&robot_speed, 0.47, 0.16, 0.01, 0.2, 0.01/0.47/10.0, 0.3, -100, 100, sampleTime/1000.0);
+	//PID_init(&robot_position, 1.5, 1.0, 0.01, 0.2, 0.01/1.5/10.0, 0.3, -100, 100, sampleTime/1000.0);  // optimal for 42mm wheels
+	//PID_init(&robot_speed, 0.47, 0.16, 0.01, 0.2, 0.01/0.47/10.0, 0.3, -100, 100, sampleTime/1000.0);  // optimal for 42mm wheels
+	
+	// supports different wheel diameters: 42mm,56mm,70mm tested
+	PID_init(&robot_position, 1.5 * pid_corr_dia, 1.0  * pid_corr_dia, 0.01 * pid_corr_dia, 0.2, (0.01 * pid_corr_dia) / (1.5 * pid_corr_dia) / 10.0, 0.3, -100, 100, sampleTime/1000.0);
+	PID_init(&robot_speed,   0.47 * pid_corr_dia, 0.16 * pid_corr_dia, 0.01 * pid_corr_dia, 0.2, (0.01 * pid_corr_dia) / (0.47 * pid_corr_dia) / 10.0, 0.3, -100, 100, sampleTime/1000.0);
+
 
 	// simple line follower PID --> steering
 	// error == getColorHue - lineRef, lineRef == initial value ('edge' of line)
@@ -473,6 +487,7 @@ task main()
 			displayCenteredBigTextLine( 5, "ref:%f",referencePosition);
 			displayCenteredBigTextLine( 7, "pos:%f",robotPosition);
 			displayCenteredBigTextLine( 9, "per:%f",robot_position_err);
+			//displayCenteredBigTextLine( 9, "per:%f",getColorHue (colorSensor));
 
 
 
@@ -512,11 +527,26 @@ task main()
 		  		case IR_BLUE_UP_BLUE_DOWN : {steer_right = 0; steer_left = 0;};break;
 		  		case IR_BEACON_MODE_ON : {requestedSpeed = 0.0; steer_right = 0; steer_left = 0;};break;
 		  		case IR_RED_UP_BLUE_UP : setMotor(liftMotor, -5);break;
-		  		case IR_RED_DOWN_BLUE_DOWN : setMotor(liftMotor, 5);break;		  	
-		  		default: setMotor(liftMotor, 0); 			
+		  		case IR_RED_DOWN_BLUE_DOWN : setMotor(liftMotor, 5);break;
+		  		default: setMotor(liftMotor, 0);
 		  	}
-		  	
 		  }
+
+
+		  if(stopatedge && (getIRRemoteButtons(irSensor) == IR_NONE))
+		  {
+		  	if(getColorHue (colorSensor) < EDGE_THRESHOLD)
+		  	{
+		  		// stop the robot. The sensor is telling us the there is an endge in front of the wheels
+		  		requestedSpeed = 0.0;
+		  		steer_right = 0;
+		  		steer_left = 0;
+		  		pidLineOutput = 0;
+		  		AvoidOutput = 0;
+
+		  	}
+		  }
+
 
 		  // please consider that 'pidRobotPositionOutput' and 'pidRobotSpeedOutput' are subtracted (see explanation above)
 		  float average_power = -pidRobotPositionOutput-pidRobotSpeedOutput+pidGyroAngleOutput+pidGyroSpeedOutput;
